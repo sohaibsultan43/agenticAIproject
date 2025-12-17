@@ -1,0 +1,33 @@
+# Core LLM & Embeddings
+google-generativeai>=0.4.0
+
+# Orchestration Framework
+llama-index>=0.10.0
+llama-index-llms-gemini>=0.1.0
+llama-index-embeddings-gemini>=0.1.0
+llama-index-vector-stores-weaviate>=0.1.0
+llama-index-readers-file>=0.1.0
+
+# Text Splitting (Recursive Chunking)
+langchain>=0.1.0
+
+# Vector Database Client
+weaviate-client>=4.4.0
+
+# API Framework
+fastapi>=0.100.0
+uvicorn>=0.20.0
+
+# ArXiv API
+arxiv>=2.1.0
+
+# PDF Processing
+pypdf>=4.0.0
+pymupdf>=1.23.0
+llama-parse>=0.4.0  # Enhanced parsing for equations/tables
+
+# Utilities
+python-dotenv>=1.0.0
+requests>=2.31.0
+aiohttp>=3.9.0
+tenacity>=8.2.0

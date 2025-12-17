@@ -1,0 +1,119 @@
+:root {
+    --bg-primary: #f8fafc;
+    --bg-secondary: #e2e8f0;
+    --bg-card: #ffffff;
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    /* Brand */
+    --accent-primary: #fc94af;
+    --accent-secondary: #f4729a;
+    --accent-glow: rgba(252, 148, 175, 0.16);
+    --success: #22c55e;
+    --error: #ef4444;
+    --radius: 0.75rem;
+    --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+}
+
+button {
+    cursor: pointer;
+    border: none;
+    background: none;
+    font-family: inherit;
+}
+
+/* Glassmorphism utilities */
+.glass-panel {
+    background: rgba(255, 255, 255, 0.85);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    border-radius: var(--radius);
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+}
+
+.gradient-text {
+    background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+/* App branding */
+.sidebar-brand {
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.sidebar-icon {
+    width: 28px;
+    height: 28px;
+    object-fit: contain;
+    opacity: 1;
+    background: #fff;
+    border-radius: 999px;
+    padding: 4px;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
+}
+
+.main-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    flex-shrink: 0;
+}
+
+.main-brand {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 52px;
+}
+
+.main-logo {
+    height: 52px;
+    width: auto;
+    object-fit: contain;
+}
+
+.main-title {
+    font-size: 1.65rem;
+    margin: 0;
+    text-align: center;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
