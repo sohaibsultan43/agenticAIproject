@@ -1,5 +1,6 @@
 # Core LLM & Embeddings
 google-generativeai>=0.4.0
+openai>=2.13.0  # OpenAI GPT-5 mini
 
 # Orchestration Framework
 llama-index>=0.10.0

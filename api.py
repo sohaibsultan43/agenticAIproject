@@ -28,6 +28,15 @@ from ingest import (
     configure_gemini
 )
 
+# Import agents
+from agents import AgentRegistry, AgentContext
+from agents.summarizer import summarizer_agent
+from agents.methodology_extractor import methodology_extractor_agent
+from agents.comparator import comparator_agent
+from agents.gap_finder import gap_finder_agent
+from agents.citation_analyzer import citation_analyzer_agent
+from agents.general_qa import general_qa_agent
+
 # Load environment variables
 load_dotenv()
 setup_logging("ScholarSync")
@@ -527,7 +536,30 @@ async def chat(req: ChatRequest):
             return {"response": f"Found {chunk_stats['retrieved']} chunks but none had useful text content. The paper may be mostly equations/figures."}
         client.close()
         
-        # 4. Generate Answer
+        # 4. Check if a specialized agent should handle this query
+        matching_agent = AgentRegistry.find_matching(req.message)
+        
+        if matching_agent:
+            # Route to specialized agent
+            logger.info("Routing to agent: %s", matching_agent.name)
+            agent_context = AgentContext(
+                tenant_id=req.tenant_id or "default",
+                papers=list(sources),
+                chat_history=req.history,
+                metadata={
+                    "paper_context": context_str,
+                    "sources": list(sources)
+                }
+            )
+            agent_response = await matching_agent.run(req.message, agent_context)
+            
+            return {
+                "response": agent_response.content,
+                "sources": agent_response.sources,
+                "agent": matching_agent.name
+            }
+        
+        # 5. Default: Use standard RAG response
         model = genai.GenerativeModel(
             model_name="gemini-2.5-flash",
             system_instruction=ANALYST_PROMPT
