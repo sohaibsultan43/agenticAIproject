@@ -1,9 +1,9 @@
-# 🎓 ScholarSync (Gemini Edition)
+# 🎓 ScholarSync (Multi-Agent Edition)
 
-An autonomous AI research assistant powered by the cloud. ScholarSync listens to your vague research ideas, autonomously searches academic repositories (ArXiv), downloads relevant papers to local storage, and builds a knowledge base in Weaviate Cloud you can query.
+An autonomous AI research assistant powered by OpenAI GPT-5 mini. ScholarSync uses 6 specialized agents to help you search academic repositories (ArXiv), download papers, build a knowledge base in Weaviate Cloud, and intelligently analyze research.
 
 ![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)
-![Gemini](https://img.shields.io/badge/LLM-Gemini%201.5%20Flash-green.svg)
+![OpenAI](https://img.shields.io/badge/LLM-GPT--5%20mini-green.svg)
 ![Weaviate Cloud](https://img.shields.io/badge/Weaviate-Cloud-purple.svg)
 
 ## ✨ Features
@@ -11,14 +11,26 @@ An autonomous AI research assistant powered by the cloud. ScholarSync listens to
 - **🔍 Idea Refinement** - AI-powered consultation to convert vague ideas into precise search queries
 - **📥 Autonomous Fetching** - Automatically searches ArXiv and downloads relevant papers
 - **🧠 Smart Indexing** - Creates embeddings using Gemini and stores them in Weaviate Cloud
+- **🤖 6 Specialized Agents** - Intelligent routing to expert agents for different tasks
 - **💬 RAG-based Q&A** - Ask questions about your papers with cited answers
 - **☁️ Cloud-Powered** - Uses Weaviate Cloud for reliable, scalable vector storage
+
+## 🤖 Specialized Agents
+
+| Agent | Purpose | Example Query |
+|-------|---------|---------------|
+| **Summarizer** | Generate structured paper summaries | "summarize this paper" |
+| **Methodology Extractor** | Extract research methods | "what methodology was used?" |
+| **Comparator** | Compare multiple papers | "compare these papers" |
+| **Gap Finder** | Identify research gaps | "what are the limitations?" |
+| **Citation Analyzer** | Analyze citations | "what papers does this cite?" |
+| **General Q&A** | Answer any question (fallback) | Any other question |
 
 ## 🛠️ Technology Stack
 
 | Component | Technology |
 |-----------|------------|
-| **LLM** | Google Gemini 1.5 Flash |
+| **LLM** | OpenAI GPT-5 mini |
 | **Embeddings** | Gemini text-embedding-004 |
 | **Orchestration** | LlamaIndex |
 | **Vector Database** | Weaviate Cloud |
@@ -44,7 +56,7 @@ ScholarSync/
 ### Prerequisites
 
 - **Python 3.10+**
-- **Google AI Studio API Key** - [Get your key here](https://aistudio.google.com/app/apikey)
+- **OpenAI API Key** - [Get your key here](https://platform.openai.com/api-keys)
 - **Weaviate Cloud Account** - [Sign up free here](https://console.weaviate.cloud/)
 
 ### Step 1: Clone & Setup Environment
@@ -75,7 +87,7 @@ pip install -r requirements.txt
 Edit the `.env` file and add your credentials:
 
 ```env
-GOOGLE_API_KEY=your_google_api_key_here
+OPENAI_API_KEY=your_openai_api_key_here
 WEAVIATE_CLOUD_URL=https://your-cluster-xxxxx.weaviate.network
 WEAVIATE_API_KEY=your_weaviate_api_key_here
 ```
