@@ -156,61 +156,113 @@ ScholarSync uses **keyword-based routing** to automatically select the best agen
 
 - **Python 3.10+**
 - **Node.js 16+** (for frontend)
-- **OpenAI API Key** - [Get it here](https://platform.openai.com/api-keys)
+- **Google Gemini API Key** - [Get it here](https://aistudio.google.com/app/apikey)
 - **Weaviate Cloud Account** - [Sign up free](https://console.weaviate.cloud/)
 
-### Installation
+### Installation (Step-by-Step)
 
-#### 1. Clone and Setup Backend
+#### 1. Clone the Repository
 
 ```powershell
-# Clone the repository
 git clone <your-repo-url>
 cd ScholarSync
-
-# Create virtual environment
-python -m venv venv
-.\\venv\\Scripts\\Activate
-
-# Install dependencies
-pip install -r requirements.txt
 ```
 
-#### 2. Configure Weaviate Cloud
+#### 2. Set Up Python Environment
 
-1. Go to [Weaviate Cloud Console](https://console.weaviate.cloud/)
-2. Create a **Free Sandbox** cluster
-3. Copy your **Cluster URL** (e.g., `https://xxx.weaviate.network`)
-4. Create and copy an **API Key**
+```powershell
+# Create virtual environment
+python -m venv venv
 
-#### 3. Set Environment Variables
+# Activate virtual environment
+.\venv\Scripts\Activate  # Windows PowerShell
+# source venv/bin/activate  # Linux/Mac
+
+# Verify Python version
+python --version  # Should be 3.10+
+```
+
+#### 3. Install Python Dependencies
+
+```powershell
+# Install all requirements
+pip install -r requirements.txt
+
+# Verify installation
+pip list | Select-String "llama-index"
+```
+
+#### 4. Configure Environment Variables
 
 Create a `.env` file from the template:
 
 ```powershell
-cp .env.example .env
+Copy-Item .env.example .env
 ```
 
-Edit `.env` and add your keys:
+Edit `.env` and add your API keys:
 
 ```env
-OPENAI_API_KEY=sk-...
+# Required: Google Gemini API
+GEMINI_API_KEY=your_gemini_api_key_here
+
+# Required: Weaviate Cloud
 WEAVIATE_CLOUD_URL=https://your-cluster.weaviate.network
-WEAVIATE_API_KEY=your_weaviate_key
+WEAVIATE_API_KEY=your_weaviate_api_key_here
+
+# Optional: OpenAI (if using GPT instead of Gemini)
+OPENAI_API_KEY=sk-...
+
+# Optional: Enhanced PDF parsing
+LLAMA_CLOUD_API_KEY=llx-...
+
+# Optional: Configuration
+DOWNLOAD_DIR=./downloaded_papers
+HOST=127.0.0.1
+PORT=8000
 ```
 
-#### 4. Setup Frontend
+**How to get API keys:**
+
+1. **Gemini API Key**: 
+   - Go to [Google AI Studio](https://aistudio.google.com/app/apikey)
+   - Create new API key
+   - Copy and paste into `.env`
+
+2. **Weaviate Cloud**:
+   - Visit [Weaviate Console](https://console.weaviate.cloud/)
+   - Create a free sandbox cluster
+   - Copy cluster URL and API key
+
+#### 5. Setup Frontend
 
 ```powershell
 cd frontend
 npm install
+cd ..
 ```
 
-#### 5. Run the Application
+#### 6. Verify Setup
+
+```powershell
+# Test Python imports
+python -c "from src.api import app; print('✓ Backend imports working')"
+
+# Test frontend dependencies
+cd frontend
+npm list react
+cd ..
+```
+
+---
+
+### Running the Application
+
+#### Option 1: Quick Start (Recommended)
 
 **Terminal 1 - Backend:**
 ```powershell
-uvicorn api:app --reload
+python run_api.py
 ```
 
 **Terminal 2 - Frontend:**
@@ -219,10 +271,188 @@ cd frontend
 npm run dev
 ```
 
-**Access:**
-- Frontend: http://localhost:5173
-- Backend API: http://localhost:8000
-- API Docs: http://localhost:8000/docs
+#### Option 2: Development Mode
+
+**Backend with auto-reload:**
+```powershell
+uvicorn src.api:app --reload --host 127.0.0.1 --port 8000
+```
+
+**Frontend with hot-reload:**
+```powershell
+cd frontend
+npm run dev -- --host
+```
+
+#### Option 3: Docker (if configured)
+
+```powershell
+docker-compose up
+```
+
+---
+
+### Access Points
+
+Once both services are running:
+
+- **Frontend UI**: http://localhost:5173
+- **Backend API**: http://localhost:8000
+- **API Documentation (Swagger)**: http://localhost:8000/docs
+- **Health Check**: http://localhost:8000/api/health
+
+---
+
+### Demo Commands & Sample Inputs
+
+#### Sample Workflow 1: Research Paper Discovery
+
+1. **Open Frontend**: Navigate to http://localhost:5173
+
+2. **Start Consultant Phase**: Enter a research idea
+   ```
+   Sample Input: "I want to research transformer models for natural language processing"
+   ```
+
+3. **Review Search Plan**: AI generates a structured plan with:
+   - Research goal
+   - Key concepts
+   - Methodologies
+   - Search keywords
+   - ArXiv search query
+
+4. **Click "Search with this query"**: System searches ArXiv
+
+5. **Select Papers**: Choose 3-5 papers from results
+
+6. **Download & Ingest**: Click "Download Selected" then "Ingest Papers"
+
+7. **Switch to Analyst Phase**: Click "Analyst" tab
+
+8. **Ask Questions**:
+   ```
+   Sample Queries:
+   - "Summarize the main contributions of these papers"
+   - "What methodology do they use?"
+   - "Compare the different approaches"
+   - "What are the limitations?"
+   - "What papers do they cite?"
+   ```
+
+#### Sample Workflow 2: API Testing (cURL)
+
+**Health Check:**
+```bash
+curl http://localhost:8000/api/health
+```
+
+**Search Papers:**
+```bash
+curl -X POST http://localhost:8000/api/search \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "transformer neural networks",
+    "max_results": 5,
+    "tenant_id": "demo"
+  }'
+```
+
+**Chat (Consultant Phase):**
+```bash
+curl -X POST http://localhost:8000/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "I want to research attention mechanisms",
+    "phase": "consultant",
+    "tenant_id": "demo"
+  }'
+```
+
+**System Status:**
+```bash
+curl http://localhost:8000/api/status?tenant_id=demo
+```
+
+#### Expected Outputs
+
+**1. Consultant Response:**
+```markdown
+### 🎯 Research Goal
+This research aims to explore how attention mechanisms enable neural networks 
+to focus on relevant parts of input sequences...
+
+### 💡 Core Concepts
+- **Self-Attention**: Mechanism allowing models to weigh importance...
+- **Multi-Head Attention**: Parallel attention layers for diverse representations...
+...
+
+Search Query: `attention mechanism transformer neural networks`
+```
+
+**2. Analyst Response (Summarization):**
+```markdown
+**Summary**: The paper introduces the Transformer architecture, which relies
+entirely on self-attention mechanisms...
+
+**Key Points**:
+- Eliminates recurrence and convolutions
+- Uses multi-head attention for parallel processing
+- Achieves SOTA on WMT translation tasks
+
+[Source: attention_is_all_you_need.pdf, p.3]
+```
+
+---
+
+### Running Experiments
+
+#### Baseline Chunking Notebook
+
+```powershell
+cd notebooks
+python 01_baseline_chunking.py
+```
+
+**Expected Output**: Demonstrates how a paper is split into hierarchical chunks with statistics.
+
+#### Agent Evaluation Notebook
+
+```powershell
+cd notebooks  
+python 02_agent_evaluation.py
+```
+
+**Expected Output**: Agent routing accuracy report (should be ~95%) and response quality scores.
+
+---
+
+### Troubleshooting
+
+**Issue**: `ModuleNotFoundError: No module named 'src'`
+```powershell
+# Solution: Use run_api.py instead of direct uvicorn
+python run_api.py
+```
+
+**Issue**: `Weaviate connection failed`
+```powershell
+# Verify your .env has correct values
+Get-Content .env | Select-String "WEAVIATE"
+
+# Test connection
+python -c "from src.ingest import get_weaviate_client; client = get_weaviate_client(); print('✓ Connected'); client.close()"
+```
+
+**Issue**: Frontend can't connect to backend
+```powershell
+# Check backend is running on port 8000
+curl http://localhost:8000/api/health
+
+# Verify frontend API URL
+cat frontend/src/api.js | Select-String "baseURL"
+```
+
+---
 
 ---
 
