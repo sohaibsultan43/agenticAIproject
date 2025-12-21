@@ -207,7 +207,12 @@ export default function ChatPanel() {
             const phaseToUse = chatProcessed ? 'analyst' : 'consultant';
             const tenantId = currentSessionId;
             const data = await sendChatMessage(userMsg, phaseToUse, apiHistory, tenantId);
-            const updated = [...newHistory, { role: 'model', parts: [data.response], searchQuery: data.search_query }];
+            const updated = [...newHistory, {
+                role: 'model',
+                parts: [data.response],
+                searchQuery: data.search_query,
+                agent: data.agent || null  // Add agent field for badge
+            }];
             setMessages(updated);
         } catch (err) {
             console.error("Chat failed", err);
@@ -301,30 +306,35 @@ export default function ChatPanel() {
                             }}
                         />
                         <p>Start a conversation</p>
-            </div>
-                {messages.map((msg, idx) => (
-                    <div key={idx} className={`message-wrapper ${msg.role}`}>
+                    </div>
+                    {messages.map((msg, idx) => (
+                        <div key={idx} className={`message-wrapper ${msg.role}`}>
                             {msg.role === 'model' && (
                                 <div className="message-header">
-                        <div className="avatar">
+                                    <div className="avatar">
                                         <img
                                             className="assistant-icon"
                                             src="/favicon.png"
                                             alt=""
                                         />
                                     </div>
-                                    <span className="role-name">Assistant</span>
-                        </div>
+                                    <span className="role-name">
+                                        {msg.agent ? msg.agent : 'Assistant'}
+                                    </span>
+                                    {msg.agent && (
+                                        <span className="agent-badge">Agent</span>
+                                    )}
+                                </div>
                             )}
                             <div className="message-content">
-                            <div className="message-text">
+                                <div className="message-text">
                                     {msg.role === 'model' ? (
                                         <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
                                             {msg.parts[0]}
                                         </ReactMarkdown>
                                     ) : (
                                         msg.parts[0].split('\n').map((line, i) => (
-                                    <p key={i}>{line || '\u00A0'}</p>
+                                            <p key={i}>{line || '\u00A0'}</p>
                                         ))
                                     )}
                                 </div>
@@ -339,10 +349,10 @@ export default function ChatPanel() {
                                     </button>
                                 </div>
                             )}
-                    </div>
-                ))}
-                {loading && (
-                    <div className="message-wrapper model">
+                        </div>
+                    ))}
+                    {loading && (
+                        <div className="message-wrapper model">
                             <div className="message-header">
                                 <div className="avatar">
                                     <img
@@ -354,14 +364,14 @@ export default function ChatPanel() {
                                 <span className="role-name">Assistant</span>
                             </div>
                             <div className="message-content">
-                            <div className="typing-indicator">
-                                <span></span><span></span><span></span>
+                                <div className="typing-indicator">
+                                    <span></span><span></span><span></span>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                )}
-                <div ref={messagesEndRef} />
-            </div>
+                    )}
+                    <div ref={messagesEndRef} />
+                </div>
 
                 {/* Search Results */}
                 {chatResults.length > 0 && (
@@ -458,18 +468,18 @@ export default function ChatPanel() {
                 {/* Input */}
                 <div className="input-container">
                     <form onSubmit={handleSend} className="input-area">
-                <input
-                    type="text"
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
+                        <input
+                            type="text"
+                            value={input}
+                            onChange={(e) => setInput(e.target.value)}
                             placeholder="Message..."
-                    className="chat-input"
-                    disabled={loading}
-                />
-                <button type="submit" disabled={loading || !input.trim()} className="send-btn">
+                            className="chat-input"
+                            disabled={loading}
+                        />
+                        <button type="submit" disabled={loading || !input.trim()} className="send-btn">
                             <Send size={18} />
-                </button>
-            </form>
+                        </button>
+                    </form>
                 </div>
             </div>
 
@@ -521,12 +531,12 @@ export default function ChatPanel() {
                                 onClick={async (e) => {
                                     e.stopPropagation();
                                     if (!confirm('Delete this session and its history?')) return;
-                                    
+
                                     // Remove from localStorage
                                     const allMsgs = safeParseObject('chat_messages');
                                     delete allMsgs[id];
                                     localStorage.setItem('chat_messages', JSON.stringify(allMsgs));
-                                    
+
                                     const allProcessed = safeParseObject('chat_processed');
                                     delete allProcessed[id];
                                     localStorage.setItem('chat_processed', JSON.stringify(allProcessed));
@@ -538,19 +548,19 @@ export default function ChatPanel() {
                                     const allPapers = safeParseObject('chat_paper_results');
                                     delete allPapers[id];
                                     localStorage.setItem('chat_paper_results', JSON.stringify(allPapers));
-                                    
+
                                     // Remove from sessions list
                                     const newSessions = sessions.filter(s => s !== id);
                                     setSessions(newSessions);
                                     localStorage.setItem('chat_sessions', JSON.stringify(newSessions));
-                                    
+
                                     // Clear KB + delete this session's download folder
                                     try {
                                         await clearKB(id, id);
                                     } catch (err) {
                                         console.error(err);
                                     }
-                                    
+
                                     // If deleting current session, switch to another or create new
                                     if (id === currentSessionId) {
                                         if (newSessions.length > 0) {

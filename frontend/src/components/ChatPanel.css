@@ -540,3 +540,15 @@
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
 }
+
+/* Agent badge - shows when a specialized agent handled the response */
+.agent-badge {
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 0.15rem 0.4rem;
+    border-radius: 0.25rem;
+    background: linear-gradient(135deg, #8b5cf6, #6366f1);
+    color: #fff;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}

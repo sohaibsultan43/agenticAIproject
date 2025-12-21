@@ -19,7 +19,7 @@ from datetime import datetime
 import asyncio
 from dotenv import load_dotenv
 
-from logging_utils import setup_logging
+from .logging_utils import setup_logging
 import logging
 
 import google.generativeai as genai
