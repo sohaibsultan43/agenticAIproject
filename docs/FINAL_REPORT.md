@@ -316,26 +316,52 @@ def find_matching_agent(query):
 
 ## 3. Experiments & Results
 
-### 3.1 Baseline System
+### 3.1 Baseline Experiments
 
-#### Initial Implementation (Baseline)
+#### Experiment 1: Document Chunking Process
+
+**Objective**: Demonstrate hierarchical text chunking and embedding process  
+**Notebook**: `notebooks/01_baseline_chunking.ipynb`  
+**Sample Paper**: "Attention Is All You Need" (Transformer architecture paper)
+
+**Chunking Configuration**:
+
+| Level | Chunk Size | Overlap | Purpose | Chunks Created |
+|-------|-----------|---------|---------|----------------|
+| Large | 2048 chars | 200 chars | Broad context | ~15-20 |
+| Medium | 512 chars | 50 chars | Balanced retrieval | ~60-80 |
+| Small | 128 chars | 20 chars | Precise matching | ~150-200 |
+
+**Key Findings**:
+1. **Hierarchical chunking** creates ~230-300 total chunks per typical research paper
+2. **Medium chunks** provide optimal balance between context and precision
+3. **Quality filtering** (50% alphabetic content minimum) removes equation-heavy noise chunks
+4. **Metadata preservation** enables accurate source citation (filename, page number tracked)
+
+**Sample Output**:
+- Successfully parsed PDF with PyMuPDF
+- Created hierarchical chunk structure with parent-child relationships
+- Generated Gemini embeddings (768-dimensional vectors)
+- Stored in Weaviate with tenant isolation
+
+#### Experiment 2: Initial Single-Agent System (Deprecated)
 
 **Configuration**:
-- Single general-purpose agent
-- Fixed chunk size (512 tokens)
+- Single general-purpose Q&A agent
+- Fixed chunk size (512 tokens only)
 - Top-5 retrieval
 - No specialized routing
 
-**Performance**:
-- Response Quality: Moderate
+**Performance** (Historical - before multi-agent implementation):
+- Response Quality: Moderate (6/10 subjective rating)
 - Citation Accuracy: ~70%
-- User Satisfaction: 6/10 (subjective)
+- Unable to handle specialized tasks (comparisons, gap analysis)
 
-**Limitations**:
-- Generic responses to specialized questions
-- Poor handling of comparison queries
+**Limitations Identified**:
+- Generic responses to specialized questions (e.g., "summarize" vs "compare")
+- Poor handling of comparison queries (no structured format)
 - Inconsistent summary structure
-- Limited context understanding
+- Limited context understanding due to single chunk size
 
 ### 3.2 Evolution to Final System
 
@@ -422,22 +448,30 @@ def find_matching_agent(query):
 
 #### Routing Accuracy Test
 
-**Test Queries**: 20 diverse questions
+**Test Date**: December 21, 2025  
+**Test Queries**: 8 diverse questions from notebook evaluation  
+**Methodology**: Automated keyword-based routing with expected agent comparison
 
-| Agent | Correct Matches | Incorrect Matches | Accuracy |
-|-------|----------------|-------------------|----------|
-| SummarizerAgent | 4/4 | 0 | 100% |
-| MethodologyExtractorAgent | 3/4 | 1 | 75% |
-| ComparatorAgent | 4/4 | 0 | 100% |
-| GapFinderAgent | 3/3 | 0 | 100% |
-| CitationAnalyzerAgent | 2/2 | 0 | 100% |
-| GeneralQAAgent | 3/3 | 0 | 100% |
-| **Overall** | **19/20** | **1** | **95%** |
+**Results from `notebooks/02_agent_evaluation.ipynb`**:
+
+| Query | Expected Agent | Matched Agent | Result |
+|-------|---------------|---------------|--------|
+| "Can you summarize this paper?" | SummarizerAgent | SummarizerAgent | ✓ |
+| "What methodology did they use?" | MethodologyExtractorAgent | MethodologyExtractorAgent | ✓ |
+| "Compare these two approaches" | ComparatorAgent | ComparatorAgent | ✓ |
+| "What are the research gaps?" | GapFinderAgent | GapFinderAgent | ✓ |
+| "What papers does this cite?" | CitationAnalyzerAgent | CitationAnalyzerAgent | ✓ |
+| "What were the main results?" | GeneralQAAgent | GeneralQAAgent | ✓ |
+| "Give me a tldr" | SummarizerAgent | SummarizerAgent | ✓ |
+| "How does approach A differ from B?" | ComparatorAgent | MethodologyExtractorAgent | ✗ |
+
+**Overall Accuracy**: 87.5% (7/8 correct)
 
 **Error Analysis**:
-- 1 misroute: "What techniques were used?" → GapFinderAgent (expected: MethodologyExtractorAgent)
-- Cause: "techniques" keyword overlap with gap-finding terminology
-- Fix: Adjust keyword priority or add exclusion rules
+- 1 misroute: "How does approach A differ from B?" → MethodologyExtractorAgent (expected: ComparatorAgent)
+- **Cause**: The word "approach" triggered MethodologyExtractorAgent keywords before "differ" could trigger ComparatorAgent
+- **Potential Fix**: Implement keyword priority weighting or position-based scoring (keywords at query start get higher weight)
+- **Impact**: Minor - answer would still be relevant, just less optimized for comparison
 
 #### Response Quality Evaluation
 
@@ -693,6 +727,25 @@ Agent: "The paper cites Vaswani et al. (2017), Devlin et al. (2018)..."
 
 ---
 
-**Report Prepared**: December 2025  
+**Report Prepared**: December 21, 2025  
 **Project**: ScholarSync - Multi-Agent Research Assistant  
-**Team**: [To be completed in CONTRIBUTIONS.md]
+**Evaluated By**: Experimental notebooks in `notebooks/` directory  
+**Team Members**: [To be completed in CONTRIBUTIONS.md]
+
+---
+
+## Reproducibility Statement
+
+All experiments can be reproduced by running the Jupyter notebooks:
+
+1. **`notebooks/01_baseline_chunking.ipynb`**: Demonstrates hierarchical chunking and embedding process
+2. **`notebooks/02_agent_evaluation.ipynb`**: Tests agent routing accuracy and response quality
+
+**Requirements**:
+- Python 3.11+
+- API Keys: `GOOGLE_API_KEY`, `OPENAI_API_KEY`, `WEAVIATE_CLOUD_URL`, `WEAVIATE_API_KEY`
+- Dependencies: See `requirements.txt`
+
+**Results Stored In**:
+- `results/agent_evaluation_results.json`: Quantitative routing accuracy data
+- Notebook outputs: Qualitative evaluation and visualizations

@@ -1,0 +1,63 @@
+{
+  "routing_accuracy": 87.5,
+  "routing_tests": [
+    {
+      "query": "Can you summarize this paper?",
+      "expected": "SummarizerAgent",
+      "matched": "SummarizerAgent",
+      "correct": true
+    },
+    {
+      "query": "What methodology did they use?",
+      "expected": "MethodologyExtractorAgent",
+      "matched": "MethodologyExtractorAgent",
+      "correct": true
+    },
+    {
+      "query": "Compare these two approaches",
+      "expected": "ComparatorAgent",
+      "matched": "ComparatorAgent",
+      "correct": true
+    },
+    {
+      "query": "What are the research gaps?",
+      "expected": "GapFinderAgent",
+      "matched": "GapFinderAgent",
+      "correct": true
+    },
+    {
+      "query": "What papers does this cite?",
+      "expected": "CitationAnalyzerAgent",
+      "matched": "CitationAnalyzerAgent",
+      "correct": true
+    },
+    {
+      "query": "What were the main results?",
+      "expected": "GeneralQAAgent",
+      "matched": "GeneralQAAgent",
+      "correct": true
+    },
+    {
+      "query": "Give me a tldr",
+      "expected": "SummarizerAgent",
+      "matched": "SummarizerAgent",
+      "correct": true
+    },
+    {
+      "query": "How does approach A differ from B?",
+      "expected": "ComparatorAgent",
+      "matched": "MethodologyExtractorAgent",
+      "correct": false
+    }
+  ],
+  "agents_evaluated": [
+    "SummarizerAgent",
+    "MethodologyExtractorAgent",
+    "ComparatorAgent",
+    "GapFinderAgent",
+    "CitationAnalyzerAgent",
+    "GeneralQAAgent"
+  ],
+  "test_context_size": 911,
+  "evaluation_date": "2025-12-21"
+}

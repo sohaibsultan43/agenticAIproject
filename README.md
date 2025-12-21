@@ -22,6 +22,30 @@
 - [API Documentation](#-api-documentation)
 - [Configuration](#%EF%B8%8F-configuration)
 - [Troubleshooting](#-troubleshooting)
+- [📊 Academic Submission](#-academic-submission)
+
+---
+
+## 📊 Academic Submission
+
+**For instructors and reviewers:**
+
+-📄 **[Complete Final Report](docs/FINAL_REPORT.md)** - Comprehensive 700-line technical report covering:
+  - Dataset summary and preprocessing
+  - System architecture and multi-agent design
+  - Experimental results (87.5% agent routing accuracy)
+  - Ablation studies and error analysis
+  - Lessons learned and future work
+
+- 📓 **Experimental Notebooks**:
+  - [`notebooks/01_baseline_chunking.ipynb`](notebooks/01_baseline_chunking.ipynb) - Hierarchical chunking demonstration
+  - [`notebooks/02_agent_evaluation.ipynb`](notebooks/02_agent_evaluation.ipynb) - Agent routing evaluation
+  
+- 📈 **Results**: [`results/agent_evaluation_results.json`](results/agent_evaluation_results.json) - Quantitative metrics
+
+- 👥 **Team Contributions**: [`CONTRIBUTIONS.md`](CONTRIBUTIONS.md) - Individual reflections and contribution breakdown
+
+**Reproducibility**: All experiments can be reproduced following the [Quick Start](#-quick-start) guide and running the notebooks.
 
 ---
 

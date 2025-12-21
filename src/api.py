@@ -7,7 +7,7 @@ import time
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
 
-from logging_utils import setup_logging
+from .logging_utils import setup_logging
 import logging
 
 from fastapi import FastAPI, HTTPException, Request, Query
@@ -18,8 +18,8 @@ from dotenv import load_dotenv
 import google.generativeai as genai
 
 # Reuse existing modules
-from fetcher import search_arxiv, search_semantic_scholar, download_pdf, get_downloaded_papers, PaperInfo
-from ingest import (
+from .fetcher import search_arxiv, search_semantic_scholar, download_pdf, get_downloaded_papers, PaperInfo
+from .ingest import (
     get_weaviate_client,
     create_weaviate_schema,
     load_pdfs,
@@ -29,13 +29,13 @@ from ingest import (
 )
 
 # Import agents
-from agents import AgentRegistry, AgentContext
-from agents.summarizer import summarizer_agent
-from agents.methodology_extractor import methodology_extractor_agent
-from agents.comparator import comparator_agent
-from agents.gap_finder import gap_finder_agent
-from agents.citation_analyzer import citation_analyzer_agent
-from agents.general_qa import general_qa_agent
+from .agents import AgentRegistry, AgentContext
+from .agents.summarizer import summarizer_agent
+from .agents.methodology_extractor import methodology_extractor_agent
+from .agents.comparator import comparator_agent
+from .agents.gap_finder import gap_finder_agent
+from .agents.citation_analyzer import citation_analyzer_agent
+from .agents.general_qa import general_qa_agent
 
 # Load environment variables
 load_dotenv()
