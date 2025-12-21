@@ -456,15 +456,15 @@ async def chat(req: ChatRequest):
         
         # Save to session memory
         save_message(req.tenant_id, "user", req.message)
-        save_message(req.tenant_id, "assistant", response.text, agent="ConsultantAgent")
+        save_message(req.tenant_id, "assistant", response.text, agent="QueryAgent")
         
         # Update context
-        update_context(req.tenant_id, agent_used="ConsultantAgent", query=req.message)
+        update_context(req.tenant_id, agent_used="QueryAgent", query=req.message)
         
         return {
             "response": response.text,
             "search_query": search_query,
-            "agent": "ConsultantAgent"  # Add agent field for badge
+            "agent": "QueryAgent"  # Add agent field for badge
         }
 
     elif req.phase == "analyst":
