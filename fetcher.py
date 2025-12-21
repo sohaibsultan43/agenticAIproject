@@ -43,6 +43,7 @@ class PaperInfo:
     published: str
     categories: List[str]
     local_path: Optional[str] = None
+    source: Optional[str] = None  # Which source: arxiv, semantic_scholar, core, pubmed
 
 
 def sanitize_filename(title: str, max_length: int = 100) -> str:
@@ -100,12 +101,21 @@ def search_arxiv(
     """
     logger.info("ArXiv search | query=%r", query)
     
+    # Clean query: remove markdown formatting that breaks ArXiv API
+    clean_query = query.strip()
+    # Remove markdown bold/italic markers
+    clean_query = clean_query.replace('**', '').replace('*', '')
+    # Remove backticks
+    clean_query = clean_query.replace('`', '')
+    # Remove extra whitespace
+    clean_query = ' '.join(clean_query.split())
+    
     # Configure the ArXiv search
     # NOTE: We intentionally fetch more than requested and then filter locally.
     # This avoids relying on ArXiv query syntax for date/author and keeps behavior predictable.
     scan_limit = min(max(max_results * 5, max_results), max_scan)
     search = arxiv.Search(
-        query=query,
+        query=clean_query,  # Use cleaned query
         max_results=scan_limit,
         sort_by=arxiv.SortCriterion.Relevance,
         sort_order=arxiv.SortOrder.Descending
@@ -247,6 +257,398 @@ def search_semantic_scholar(
             break
 
     logger.info("Semantic Scholar results: %s (query=%r)", len(results), query)
+    return results
+
+
+def search_core(
+    query: str,
+    max_results: int = MAX_PAPERS,
+    author: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+) -> List[PaperInfo]:
+    """
+    Search CORE for open access papers.
+    
+    Args:
+        query: Search query
+        max_results: Maximum results to return
+        author: Optional author filter
+        start_date: Optional start date (YYYY-MM-DD)
+        end_date: Optional end date (YYYY-MM-DD)
+    
+    Returns:
+        List of PaperInfo objects
+    """
+    logger.info("CORE search | query=%r", query)
+    
+    # CORE API endpoint
+    CORE_API_URL = "https://api.core.ac.uk/v3/search/works"
+    api_key = os.getenv("CORE_API_KEY")
+    
+    if not api_key:
+        logger.warning("CORE_API_KEY not set, skipping CORE search")
+        return []
+    
+    try:
+        headers = {"Authorization": f"Bearer {api_key}"}
+        params = {
+            "q": query,
+            "limit": max_results,
+            "scroll": "false"
+        }
+        
+        response = requests.get(CORE_API_URL, headers=headers, params=params, timeout=30)
+        response.raise_for_status()
+        data = response.json()
+    except Exception as e:
+        logger.error("CORE search failed: %s", e)
+        return []
+    
+    results = []
+    author_norm = (author or "").strip().lower()
+    start_d = _parse_iso_date(start_date)
+    end_d = _parse_iso_date(end_date)
+    
+    for item in (data.get("results") or []):
+        title = (item.get("title") or "").strip()
+        if not title:
+            continue
+        
+        # Author filter
+        authors_list = item.get("authors") or []
+        if isinstance(authors_list, list):
+            authors_list = [str(a) for a in authors_list if a]
+        else:
+            authors_list = []
+        
+        if author_norm and not any(author_norm in a.lower() for a in authors_list):
+            continue
+        
+        # Date filter
+        published_date = item.get("publishedDate") or item.get("yearPublished")
+        if published_date:
+            pub_d = _parse_iso_date(str(published_date))
+            if pub_d:
+                if start_d and pub_d < start_d:
+                    continue
+                if end_d and pub_d > end_d:
+                    continue
+                published = str(published_date)
+            else:
+                published = str(published_date)
+        else:
+            published = ""
+        
+        # Get PDF URL
+        pdf_url = item.get("downloadUrl") or ""
+        if not pdf_url:
+            continue
+        
+        abstract = (item.get("abstract") or "").strip()
+        paper_id = item.get("id") or title[:200]
+        
+        results.append(
+            PaperInfo(
+                title=title,
+                authors=authors_list,
+                abstract=abstract,
+                arxiv_id=f"core_{paper_id}",
+                pdf_url=pdf_url,
+                published=published,
+                categories=[],
+            )
+        )
+    
+    logger.info("CORE results: %s (query=%r)", len(results), query)
+    return results
+
+
+def search_pubmed(
+    query: str,
+    max_results: int = MAX_PAPERS,
+    author: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+) -> List[PaperInfo]:
+    """
+    Search PubMed and retrieve PDFs from PMC Open Access subset.
+    
+    Args:
+        query: Search query
+        max_results: Maximum results to return
+        author: Optional author filter
+        start_date: Optional start date (YYYY-MM-DD)
+        end_date: Optional end date (YYYY-MM-DD)
+    
+    Returns:
+        List of PaperInfo objects with PMC PDFs
+    """
+    logger.info("PubMed search | query=%r", query)
+    
+    # PubMed E-utilities base URL
+    ESEARCH_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
+    ESUMMARY_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi"
+    PMC_PDF_BASE = "https://www.ncbi.nlm.nih.gov/pmc/articles"
+    
+    try:
+        # Step 1: Search PubMed
+        search_params = {
+            "db": "pubmed",
+            "term": query,
+            "retmax": max_results * 3,  # Get more to filter for PMC
+            "retmode": "json"
+        }
+        
+        if author:
+            search_params["term"] += f" AND {author}[Author]"
+        if start_date and end_date:
+            search_params["term"] += f" AND {start_date}:{end_date}[PDAT]"
+        
+        response = requests.get(ESEARCH_URL, params=search_params, timeout=30)
+        response.raise_for_status()
+        search_data = response.json()
+        
+        pmids = search_data.get("esearchresult", {}).get("idlist", [])
+        if not pmids:
+            logger.info("No PubMed results found")
+            return []
+        
+        # Step 2: Get summaries to find PMC IDs
+        summary_params = {
+            "db": "pubmed",
+            "id": ",".join(pmids),
+            "retmode": "json"
+        }
+        
+        response = requests.get(ESUMMARY_URL, params=summary_params, timeout=30)
+        response.raise_for_status()
+        summary_data = response.json()
+        
+        results = []
+        for pmid in pmids:
+            article = summary_data.get("result", {}).get(pmid, {})
+            if not article:
+                continue
+            
+            # Check if article has PMC ID (open access)
+            pmc_id = None
+            for article_id in article.get("articleids", []):
+                if article_id.get("idtype") == "pmc":
+                    pmc_id = article_id.get("value")
+                    break
+            
+            if not pmc_id:
+                continue  # Skip non-open-access articles
+            
+            title = article.get("title", "").strip()
+            authors = [a.get("name", "") for a in article.get("authors", [])]
+            
+            # Construct PMC PDF URL
+            pdf_url = f"{PMC_PDF_BASE}/{pmc_id}/pdf"
+            
+            published = article.get("pubdate", "")
+            
+            results.append(
+                PaperInfo(
+                    title=title,
+                    authors=authors,
+                    abstract="",  # PubMed summaries don't include full abstract
+                    arxiv_id=f"pmc_{pmc_id}",
+                    pdf_url=pdf_url,
+                    published=published,
+                    categories=["biomedical"],
+                )
+            )
+            
+            if len(results) >= max_results:
+                break
+        
+        logger.info("PubMed/PMC results: %s (query=%r)", len(results), query)
+        return results
+        
+    except Exception as e:
+        logger.error("PubMed search failed: %s", e)
+        return []
+
+
+def _calculate_relevance_score(paper: PaperInfo, query: str, source: str) -> float:
+    """
+    Calculate relevance score for ranking papers.
+    
+    Scoring factors:
+    - Title match (40%)
+    - Abstract match (30%)
+    - Source priority (20%)
+    - Recency (10%)
+    """
+    score = 0.0
+    query_lower = query.lower()
+    query_terms = set(query_lower.split())
+    
+    # Title match (40 points)
+    title_lower = paper.title.lower()
+    title_terms = set(title_lower.split())
+    title_overlap = len(query_terms & title_terms) / max(len(query_terms), 1)
+    score += title_overlap * 40
+    
+    # Exact phrase match bonus
+    if query_lower in title_lower:
+        score += 20
+    
+    # Abstract match (30 points)
+    if paper.abstract:
+        abstract_lower = paper.abstract.lower()
+        abstract_terms = set(abstract_lower.split())
+        abstract_overlap = len(query_terms & abstract_terms) / max(len(query_terms), 1)
+        score += abstract_overlap * 30
+    
+    # Source priority (20 points)
+    source_scores = {
+        "semantic_scholar": 20,  # Best for recent + comprehensive
+        "arxiv": 18,             # Good for CS/physics
+        "core": 15,              # Good for open access
+        "pubmed": 15             # Good for biomedical
+    }
+    score += source_scores.get(source, 10)
+    
+    # Recency (10 points) - prefer papers from last 5 years
+    try:
+        if paper.published:
+            year_str = paper.published.split("-")[0]
+            year = int(year_str)
+            current_year = 2025
+            age = current_year - year
+            if age <= 5:
+                score += 10 * (1 - age / 5)
+    except:
+        pass
+    
+    return score
+
+
+def _deduplicate_papers(papers: List[tuple]) -> List[PaperInfo]:
+    """
+    Deduplicate papers based on title similarity.
+    
+    Args:
+        papers: List of (PaperInfo, source, score) tuples
+    
+    Returns:
+        Deduplicated list of PaperInfo objects
+    """
+    seen_titles = set()
+    unique_papers = []
+    
+    for paper, source, score in papers:
+        # Normalize title for comparison
+        title_norm = paper.title.lower().strip()
+        title_norm = " ".join(title_norm.split())  # Normalize whitespace
+        
+        # Check for exact match
+        if title_norm in seen_titles:
+            continue
+        
+        # Check for very similar titles (fuzzy match)
+        is_duplicate = False
+        for seen in seen_titles:
+            # Simple similarity: if 80% of words match, consider duplicate
+            title_words = set(title_norm.split())
+            seen_words = set(seen.split())
+            if len(title_words) > 0 and len(seen_words) > 0:
+                overlap = len(title_words & seen_words)
+                similarity = overlap / max(len(title_words), len(seen_words))
+                if similarity > 0.9:  # 90% similarity threshold
+                    is_duplicate = True
+                    break
+        
+        if not is_duplicate:
+            seen_titles.add(title_norm)
+            unique_papers.append(paper)
+    
+    return unique_papers
+
+
+def unified_search(
+    query: str,
+    max_results: int = MAX_PAPERS,
+    author: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    sources: Optional[List[str]] = None,
+) -> List[PaperInfo]:
+    """
+    Search across multiple sources and return ranked, deduplicated results.
+    
+    Args:
+        query: Search query
+        max_results: Maximum results to return
+        author: Optional author filter
+        start_date: Optional start date (YYYY-MM-DD)
+        end_date: Optional end date (YYYY-MM-DD)
+        sources: List of sources to search (default: all)
+                 Options: ["arxiv", "semantic_scholar", "core", "pubmed"]
+    
+    Returns:
+        Ranked and deduplicated list of PaperInfo objects
+    """
+    logger.info("Unified search | query=%r sources=%s", query, sources)
+    
+    # Default to all sources
+    if sources is None:
+        sources = ["semantic_scholar", "arxiv", "core", "pubmed"]
+    
+    all_papers = []
+    
+    # Search each source
+    for source in sources:
+        try:
+            if source == "arxiv":
+                papers = search_arxiv(query, max_results, author, start_date, end_date)
+                for paper in papers:
+                    paper.source = "arxiv"  # Set source
+                    score = _calculate_relevance_score(paper, query, "arxiv")
+                    all_papers.append((paper, "arxiv", score))
+            
+            elif source == "semantic_scholar":
+                papers = search_semantic_scholar(query, max_results, author, start_date, end_date)
+                for paper in papers:
+                    paper.source = "semantic_scholar"  # Set source
+                    score = _calculate_relevance_score(paper, query, "semantic_scholar")
+                    all_papers.append((paper, "semantic_scholar", score))
+            
+            elif source == "core":
+                papers = search_core(query, max_results, author, start_date, end_date)
+                for paper in papers:
+                    paper.source = "core"  # Set source
+                    score = _calculate_relevance_score(paper, query, "core")
+                    all_papers.append((paper, "core", score))
+            
+            elif source == "pubmed":
+                papers = search_pubmed(query, max_results, author, start_date, end_date)
+                for paper in papers:
+                    paper.source = "pubmed"  # Set source
+                    score = _calculate_relevance_score(paper, query, "pubmed")
+                    all_papers.append((paper, "pubmed", score))
+        
+        except Exception as e:
+            logger.error("Search failed for source %s: %s", source, e)
+            continue
+    
+    # Sort by relevance score (descending)
+    all_papers.sort(key=lambda x: x[2], reverse=True)
+    
+    # Deduplicate
+    unique_papers = _deduplicate_papers(all_papers)
+    
+    # Return ALL unique papers (no limit)
+    # This means if you request max_results=20 from each of 4 sources,
+    # you could get up to 80 papers (minus duplicates)
+    results = unique_papers
+    
+    logger.info("Unified search results: %d unique papers from %d sources (before dedup: %d)", 
+                len(results), len(sources), len(all_papers))
+    
     return results
 
 

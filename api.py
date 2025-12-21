@@ -18,7 +18,10 @@ from dotenv import load_dotenv
 import google.generativeai as genai
 
 # Reuse existing modules
-from fetcher import search_arxiv, search_semantic_scholar, download_pdf, get_downloaded_papers, PaperInfo
+from fetcher import (
+    search_arxiv, search_semantic_scholar, search_core, search_pubmed, 
+    unified_search, download_pdf, get_downloaded_papers, PaperInfo
+)
 from ingest import (
     get_weaviate_client,
     create_weaviate_schema,
@@ -36,6 +39,12 @@ from agents.comparator import comparator_agent
 from agents.gap_finder import gap_finder_agent
 from agents.citation_analyzer import citation_analyzer_agent
 from agents.general_qa import general_qa_agent
+
+# Import memory system
+from memory import (
+    create_memory_collections, save_message, get_session_history,
+    update_context, get_context, create_task, update_task_step
+)
 
 # Load environment variables
 load_dotenv()
@@ -70,7 +79,7 @@ class SearchRequest(BaseModel):
     author: Optional[str] = None
     start_date: Optional[str] = None  # YYYY-MM-DD
     end_date: Optional[str] = None    # YYYY-MM-DD
-    source: Optional[str] = "arxiv"   # "arxiv" | "semantic_scholar"
+    sources: Optional[List[str]] = None  # ["arxiv", "semantic_scholar", "core", "pubmed"]
 
 class PaperModel(BaseModel):
     title: str
@@ -79,6 +88,7 @@ class PaperModel(BaseModel):
     abstract: str
     pdf_url: str
     local_path: Optional[str] = None
+    source: Optional[str] = None  # arxiv, semantic_scholar, core, pubmed
     
     # Helper to convert from fetcher.PaperInfo
     @classmethod
@@ -89,7 +99,8 @@ class PaperModel(BaseModel):
             published=p.published,
             abstract=p.abstract,
             pdf_url=p.pdf_url,
-            local_path=p.local_path
+            local_path=p.local_path,
+            source=p.source
         )
 
 class DownloadRequest(BaseModel):
@@ -116,22 +127,23 @@ class DeletePaperRequest(BaseModel):
     filename: str
 
 # --- System Prompts ---
-CONSULTANT_PROMPT = """You are Thynk, an expert research consultant. Generate a compact, easy-to-scan search plan for ArXiv.
+CONSULTANT_PROMPT = """You are Thynk, an expert research consultant. Generate a compact search plan.
 
-Rules:
-- No greetings, openings, or closings; jump straight to content.
-- If the message is a greeting, very short (<5 words), or has no research intent, respond with exactly ONE short clarifying question only. Do NOT output sections or a search query in that case.
-- Otherwise, output EXACTLY these 6 lines, in this exact order, using the same labels:
-  1) **Goal:** <one short sentence>
-  2) **Concepts:** item1 • item2 • item3
-  3) **Methodologies:** item1 • item2 • item3
-  4) **Domains:** item1 • item2 • item3
-  5) **Keywords:** item1 • item2 • item3 • item4 • item5
-  6) Search Query: `3-6 simple key terms`
-- Keep every line short; do not wrap.
-- Use the bullet separator ' • ' between items (NOT numbered lists, NOT multi-line bullets).
-- Search Query MUST be simple: just 3-6 key terms separated by spaces. NO boolean operators (AND/OR), NO parentheses, NO quotes.
-- Keep Search Query on one line EXACTLY like: Search Query: `...`
+RESPONSE FORMAT (NO MARKDOWN):
+Assistant
+Goal: [One sentence describing what user wants to find]
+Concepts: [Topic 1] • [Topic 2] • [Topic 3]
+Methodologies: [Method 1] • [Method 2] • [Method 3]
+Domains: [Domain 1] • [Domain 2] • [Domain 3]
+Keywords: [Term 1] • [Term 2] • [Term 3] • [Term 4] • [Term 5]
+Search Query: [clean search terms only]
+
+RULES:
+1. NO markdown formatting (no **, *, or backticks)
+2. Use bullet separator ' • ' between items
+3. Keep each section to ONE line
+4. Search Query: simple keywords only, no special characters
+5. Be concise - max 3-5 items per section
 """
 
 ANALYST_PROMPT = """You are Thynk, a research analyst. Answer questions based on the provided paper context.
@@ -186,36 +198,27 @@ async def health_check():
     return {"status": "ok"}
 
 @app.post("/api/search", response_model=List[PaperModel])
-async def search_papers_endpoint(req: SearchRequest):
-    """Search for papers (ArXiv or Semantic Scholar)."""
+async def search_papers(req: SearchRequest):
+    """Search papers across multiple sources with unified ranking."""
+    t0 = time.perf_counter()
+    loop = asyncio.get_event_loop()
+    
     try:
-        t0 = time.perf_counter()
-        # Use loop.run_in_executor for synchronous fetcher call with timeout
-        loop = asyncio.get_event_loop()
-        source = (req.source or "arxiv").strip().lower()
-        if source not in {"arxiv", "semantic_scholar"}:
-            raise HTTPException(status_code=400, detail="Invalid source. Use: arxiv | semantic_scholar")
-
         def _run_search():
-            if source == "semantic_scholar":
-                return search_semantic_scholar(
-                    req.query,
-                    max_results=req.max_results,
-                    author=req.author,
-                    start_date=req.start_date,
-                    end_date=req.end_date,
-                )
-            return search_arxiv(
+            from fetcher import unified_search
+            return unified_search(
                 req.query,
                 max_results=req.max_results,
                 author=req.author,
                 start_date=req.start_date,
                 end_date=req.end_date,
+                sources=req.sources  # None = all sources
             )
-
+        
+        sources_str = ", ".join(req.sources) if req.sources else "all"
         logger.info(
-            "Search started | source=%s max_results=%s author=%s dates=%s..%s",
-            source,
+            "Unified search started | sources=%s max_results=%s author=%s dates=%s..%s",
+            sources_str,
             req.max_results,
             (req.author or "").strip() or None,
             req.start_date,
@@ -223,19 +226,18 @@ async def search_papers_endpoint(req: SearchRequest):
         )
         papers = await asyncio.wait_for(
             loop.run_in_executor(None, _run_search),
-            timeout=60.0  # 60 second timeout
+            timeout=90.0  # 90 second timeout for multiple sources
         )
         logger.info("Search done | results=%d elapsed=%.2fs", len(papers), time.perf_counter() - t0)
         return [PaperModel.from_paper_info(p) for p in papers]
     except asyncio.TimeoutError:
-        src = (req.source or "arxiv").replace("_", " ").title()
-        raise HTTPException(status_code=504, detail=f"{src} search timed out. Please try again with a simpler query.")
+        raise HTTPException(status_code=504, detail="Search timed out. Please try again with a simpler query.")
     except Exception as e:
         error_msg = str(e)
         if "rate limited" in error_msg.lower() or "429" in error_msg:
             raise HTTPException(status_code=503, detail=f"Source rate limited: {error_msg}")
         if "UnexpectedEmptyPageError" in error_msg or "retry" in error_msg.lower():
-            raise HTTPException(status_code=503, detail="ArXiv is temporarily unavailable. Please try again in a moment.")
+            raise HTTPException(status_code=503, detail="Source temporarily unavailable. Please try again in a moment.")
         raise HTTPException(status_code=500, detail=f"Search failed: {error_msg}")
 
 @app.post("/api/download")
@@ -452,7 +454,18 @@ async def chat(req: ChatRequest):
             if match:
                 search_query = match.group(1).strip()
         
-        return {"response": response.text, "search_query": search_query}
+        # Save to session memory
+        save_message(req.tenant_id, "user", req.message)
+        save_message(req.tenant_id, "assistant", response.text, agent="ConsultantAgent")
+        
+        # Update context
+        update_context(req.tenant_id, agent_used="ConsultantAgent", query=req.message)
+        
+        return {
+            "response": response.text,
+            "search_query": search_query,
+            "agent": "ConsultantAgent"  # Add agent field for badge
+        }
 
     elif req.phase == "analyst":
         # -- Analyst Logic (RAG) --
@@ -553,6 +566,13 @@ async def chat(req: ChatRequest):
             )
             agent_response = await matching_agent.run(req.message, agent_context)
             
+            # Save to session memory
+            save_message(req.tenant_id, "user", req.message)
+            save_message(req.tenant_id, "assistant", agent_response.content, agent=matching_agent.name)
+            
+            # Update context
+            update_context(req.tenant_id, agent_used=matching_agent.name, query=req.message)
+            
             return {
                 "response": agent_response.content,
                 "sources": agent_response.sources,
@@ -567,6 +587,13 @@ async def chat(req: ChatRequest):
         
         prompt = f"Context:\n{context_str}\n\nQuestion: {req.message}"
         response = model.generate_content(prompt)
+        
+        # Save to session memory
+        save_message(req.tenant_id, "user", req.message)
+        save_message(req.tenant_id, "assistant", response.text, agent="GeneralQA")
+        
+        # Update context
+        update_context(req.tenant_id, agent_used="GeneralQA", query=req.message)
         
         return {
             "response": response.text,

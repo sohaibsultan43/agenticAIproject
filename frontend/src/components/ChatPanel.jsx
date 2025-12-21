@@ -279,7 +279,11 @@ export default function ChatPanel() {
         setPapersError('');
         setLoading(true);
         try {
+            setPapersNotice('');
+            setPapersError('');
             const results = await searchPapers(query, 20, runId);
+            console.log('Search results received:', results);
+            console.log('First paper source:', results[0]?.source);
             setChatResults(results);
             setPapersNotice(`Found ${results.length} papers. Select to download.`);
         } catch (err) {
@@ -424,6 +428,15 @@ export default function ChatPanel() {
                                             <div className="chat-result-title" title={paper.title}>{paper.title}</div>
                                             <div className="chat-result-meta">
                                                 {paper.authors.slice(0, 2).join(', ')}{paper.authors.length > 2 ? '…' : ''} • {paper.published}
+                                                {paper.source && (
+                                                    <span className="source-badge" data-source={paper.source}>
+                                                        {paper.source === 'semantic_scholar' ? 'Semantic Scholar' :
+                                                            paper.source === 'arxiv' ? 'ArXiv' :
+                                                                paper.source === 'core' ? 'CORE' :
+                                                                    paper.source === 'pubmed' ? 'PubMed' :
+                                                                        paper.source}
+                                                    </span>
+                                                )}
                                             </div>
                                         </div>
                                         <a
